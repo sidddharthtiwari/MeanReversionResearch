@@ -1,10 +1,15 @@
 import pandas as pd
 
 from src.data.loader import load_sector, load_sector_metadata
-from src.data.validator import validate_dataset
+from src.data.validator import ValidationReport, validate_dataset
 
 
-def print_report(title, report):
+def load_bank_data() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Load the shared bank OHLC and metadata fixtures once."""
+    return load_sector("bank"), load_sector_metadata("bank")
+
+
+def print_report(title: str, report: ValidationReport) -> None:
     print("\n" + "=" * 70)
     print(title)
     print("=" * 70)
@@ -13,33 +18,42 @@ def print_report(title, report):
 
 # --------------------------------------------------
 # TEST 1
-# Original Bank Dataset
+# Valid Dataset
 # Should PASS
 # --------------------------------------------------
 
-print("\nTEST 1 - VALID DATASET")
 
-df = load_sector("bank")
-metadata = load_sector_metadata("bank")
+def test_valid_dataset(df: pd.DataFrame, metadata: pd.DataFrame) -> None:
+    report = validate_dataset(df, metadata)
 
-report = validate_dataset(df, metadata)
+    print_report("VALID DATASET", report)
 
-print_report("VALID DATASET", report)
+    assert report.is_valid is True
+    assert report.total_checks == 10
+    assert report.passed_checks == 10
+    assert report.failed_checks == 0
+    assert report.errors == []
+    assert isinstance(report.summary(), str)
 
 
 # --------------------------------------------------
 # TEST 2
-# Duplicate Row
+# Duplicate Rows
 # Should FAIL
 # --------------------------------------------------
 
-print("\nTEST 2 - DUPLICATE")
 
-duplicate_df = pd.concat([df, df.iloc[[0]]], ignore_index=True)
+def test_duplicate_rows(df: pd.DataFrame, metadata: pd.DataFrame) -> None:
+    duplicate_df = pd.concat([df, df.iloc[[0]]], ignore_index=True)
 
-report = validate_dataset(duplicate_df, metadata)
+    report = validate_dataset(duplicate_df, metadata)
 
-print_report("DUPLICATE", report)
+    print_report("DUPLICATE", report)
+
+    assert report.is_valid is False
+    assert report.total_checks == 10
+    assert report.failed_checks >= 1
+    assert any("duplicate" in error.lower() for error in report.errors)
 
 
 # --------------------------------------------------
@@ -48,15 +62,18 @@ print_report("DUPLICATE", report)
 # Should FAIL
 # --------------------------------------------------
 
-print("\nTEST 3 - NEGATIVE PRICE")
 
-negative_price_df = df.copy()
+def test_negative_price(df: pd.DataFrame, metadata: pd.DataFrame) -> None:
+    negative_price_df = df.copy()
+    negative_price_df.loc[0, "close"] = -100
 
-negative_price_df.loc[0, "close"] = -100
+    report = validate_dataset(negative_price_df, metadata)
 
-report = validate_dataset(negative_price_df, metadata)
+    print_report("NEGATIVE PRICE", report)
 
-print_report("NEGATIVE PRICE", report)
+    assert report.is_valid is False
+    assert report.failed_checks >= 1
+    assert any("close" in error and "not > 0" in error for error in report.errors)
 
 
 # --------------------------------------------------
@@ -65,34 +82,40 @@ print_report("NEGATIVE PRICE", report)
 # Should FAIL
 # --------------------------------------------------
 
-print("\nTEST 4 - NEGATIVE VOLUME")
 
-negative_volume_df = df.copy()
+def test_negative_volume(df: pd.DataFrame, metadata: pd.DataFrame) -> None:
+    negative_volume_df = df.copy()
+    negative_volume_df.loc[0, "volume"] = -50
 
-negative_volume_df.loc[0, "volume"] = -50
+    report = validate_dataset(negative_volume_df, metadata)
 
-report = validate_dataset(negative_volume_df, metadata)
+    print_report("NEGATIVE VOLUME", report)
 
-print_report("NEGATIVE VOLUME", report)
+    assert report.is_valid is False
+    assert report.failed_checks == 1
+    assert any("volume" in error and "< 0" in error for error in report.errors)
 
 
 # --------------------------------------------------
 # TEST 5
-# OHLC Relationship
+# Invalid OHLC Relationship
 # Should FAIL
 # --------------------------------------------------
 
-print("\nTEST 5 - OHLC")
 
-ohlc_df = df.copy()
+def test_invalid_ohlc(df: pd.DataFrame, metadata: pd.DataFrame) -> None:
+    ohlc_df = df.copy()
+    ohlc_df.loc[0, "high"] = 1
+    ohlc_df.loc[0, "close"] = 100
 
-ohlc_df.loc[0, "high"] = 1
+    report = validate_dataset(ohlc_df, metadata)
 
-ohlc_df.loc[0, "close"] = 100
+    print_report("OHLC", report)
 
-report = validate_dataset(ohlc_df, metadata)
-
-print_report("OHLC", report)
+    assert report.is_valid is False
+    assert report.failed_checks == 1
+    assert any("ohlc_relationship" in error for error in report.errors)
+    assert any("high >= open" in error for error in report.errors)
 
 
 # --------------------------------------------------
@@ -101,17 +124,20 @@ print_report("OHLC", report)
 # Should FAIL
 # --------------------------------------------------
 
-print("\nTEST 6 - SYMBOL")
 
-symbol_df = df.copy()
+def test_unknown_symbol(df: pd.DataFrame, metadata: pd.DataFrame) -> None:
+    symbol_df = df.copy()
+    symbol_df["symbol"] = symbol_df["symbol"].astype(str)
+    symbol_df.loc[0, "symbol"] = "FAKEBANK"
 
-symbol_df["symbol"] = symbol_df["symbol"].astype(str)
+    report = validate_dataset(symbol_df, metadata)
 
-symbol_df.loc[0, "symbol"] = "FAKEBANK"
+    print_report("UNKNOWN SYMBOL", report)
 
-report = validate_dataset(symbol_df, metadata)
-
-print_report("UNKNOWN SYMBOL", report)
+    assert report.is_valid is False
+    assert report.failed_checks == 1
+    assert any("FAKEBANK" in error for error in report.errors)
+    assert any("symbol" in warning for warning in report.warnings)
 
 
 # --------------------------------------------------
@@ -120,49 +146,98 @@ print_report("UNKNOWN SYMBOL", report)
 # Should FAIL
 # --------------------------------------------------
 
-print("\nTEST 7 - MISSING VALUES")
 
-missing_df = df.copy()
+def test_missing_values(df: pd.DataFrame, metadata: pd.DataFrame) -> None:
+    missing_df = df.copy()
+    missing_df.loc[0, "close"] = None
 
-missing_df.loc[0, "close"] = None
+    report = validate_dataset(missing_df, metadata)
 
-report = validate_dataset(missing_df, metadata)
+    print_report("MISSING VALUES", report)
 
-print_report("MISSING VALUES", report)
+    assert report.is_valid is False
+    assert report.failed_checks >= 1
+    assert any("missing value" in error for error in report.errors)
+    assert any("close" in error for error in report.errors)
+
 
 # --------------------------------------------------
 # TEST 8
+# Missing Required Column
+# Should FAIL
+# --------------------------------------------------
 
-print("\nTEST 8 - MISSING COLUMN")
 
-missing_column_df = df.drop(columns=["volume"])
+def test_missing_required_column(df: pd.DataFrame, metadata: pd.DataFrame) -> None:
+    missing_column_df = df.drop(columns=["volume"])
 
-report = validate_dataset(missing_column_df, metadata)
+    report = validate_dataset(missing_column_df, metadata)
 
-print_report("MISSING COLUMN", report)
+    print_report("MISSING COLUMN", report)
+
+    assert report.is_valid is False
+    assert report.total_checks == 10
+    assert report.failed_checks == 4
+    assert any("Missing required columns" in error for error in report.errors)
+    assert any("volume" in error for error in report.errors)
+
 
 # --------------------------------------------------
 # TEST 9
+# Empty Dataset
+# Should FAIL
+# --------------------------------------------------
 
-print("\nTEST 9 - EMPTY DATASET")
 
-empty_df = df.iloc[0:0].copy()
+def test_empty_dataset(df: pd.DataFrame, metadata: pd.DataFrame) -> None:
+    empty_df = df.iloc[0:0].copy()
 
-report = validate_dataset(empty_df, metadata)
+    report = validate_dataset(empty_df, metadata)
 
-print_report("EMPTY DATASET", report)
+    print_report("EMPTY DATASET", report)
+
+    assert report.is_valid is False
+    assert report.failed_checks == 1
+    assert any("empty" in error.lower() for error in report.errors)
+
 
 # --------------------------------------------------
 # TEST 10
+# ValidationReport API
+# --------------------------------------------------
 
-print(type(report))
 
-print(report.is_valid)
+def test_validation_report_api(df: pd.DataFrame, metadata: pd.DataFrame) -> None:
+    report = validate_dataset(df, metadata)
 
-print(report.total_checks)
+    print_report("VALIDATION REPORT API", report)
 
-print(report.failed_checks)
+    assert isinstance(report, ValidationReport)
+    assert isinstance(report.is_valid, bool)
+    assert report.total_checks == 10
+    assert isinstance(report.failed_checks, int)
+    assert isinstance(report.passed_checks, int)
+    assert report.passed_checks + report.failed_checks == report.total_checks
+    assert isinstance(report.errors, list)
+    assert isinstance(report.warnings, list)
+    assert isinstance(report.summary(), str)
+    assert "Validation Report" in report.summary()
 
-print(report.errors)
 
-print(report.warnings)
+def main() -> None:
+    df, metadata = load_bank_data()
+
+    test_valid_dataset(df, metadata)
+    test_duplicate_rows(df, metadata)
+    test_negative_price(df, metadata)
+    test_negative_volume(df, metadata)
+    test_invalid_ohlc(df, metadata)
+    test_unknown_symbol(df, metadata)
+    test_missing_values(df, metadata)
+    test_missing_required_column(df, metadata)
+    test_empty_dataset(df, metadata)
+    test_validation_report_api(df, metadata)
+
+
+if __name__ == "__main__":
+    main()
