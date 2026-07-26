@@ -13,12 +13,21 @@ __all__ = [
     "SIGNAL_SUFFIX",
     "CROSSOVER_SIGNAL_SUFFIX",
     "BREAKOUT_SIGNAL_SUFFIX",
+    "VALID_SIGNALS",
 ]
 
 # Discrete position direction encoded by signal generators.
 LONG_SIGNAL = 1
 FLAT_SIGNAL = 0
 SHORT_SIGNAL = -1
+
+VALID_SIGNALS = frozenset(
+    {
+        LONG_SIGNAL,
+        FLAT_SIGNAL,
+        SHORT_SIGNAL,
+    }
+)
 
 # Appended to feature names when deriving default signal column names.
 SIGNAL_SUFFIX = "_signal"
