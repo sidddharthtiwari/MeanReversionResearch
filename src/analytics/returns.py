@@ -9,11 +9,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.analytics.constants import (
-    TRADING_DAYS_PER_YEAR,
-    TRADING_MONTHS_PER_YEAR,
-    TRADING_WEEKS_PER_YEAR,
-)
+from src.analytics.constants import PERIODS_PER_YEAR_BY_FREQUENCY
 from src.analytics.validation import (
     _validate_columns_exist,
     _validate_frequency,
@@ -23,13 +19,6 @@ from src.analytics.validation import (
 __all__ = [
     "generate_return_summary",
 ]
-
-# Annualisation factors for supported return frequencies.
-_PERIODS_PER_YEAR_BY_FREQUENCY: dict[str, int] = {
-    "D": TRADING_DAYS_PER_YEAR,
-    "W": TRADING_WEEKS_PER_YEAR,
-    "M": TRADING_MONTHS_PER_YEAR,
-}
 
 
 def _compute_total_return(returns: pd.Series) -> float:
@@ -142,7 +131,7 @@ def generate_return_summary(
     _validate_frequency(frequency)
 
     returns = df[return_column]
-    periods_per_year = _PERIODS_PER_YEAR_BY_FREQUENCY[frequency]
+    periods_per_year = PERIODS_PER_YEAR_BY_FREQUENCY[frequency]
     total_return = _compute_total_return(returns)
     average_period_return = _compute_average_period_return(returns)
 
