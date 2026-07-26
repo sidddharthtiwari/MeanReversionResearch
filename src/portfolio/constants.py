@@ -11,6 +11,8 @@ __all__ = [
     "STRATEGY_RETURN_SUFFIX",
     "CUMULATIVE_RETURN_SUFFIX",
     "EQUITY_CURVE_SUFFIX",
+    "NET_EXPOSURE_SUFFIX",
+    "GROSS_EXPOSURE_SUFFIX",
 ]
 
 # Appended when deriving default portfolio-related column names.
@@ -18,3 +20,5 @@ POSITION_SUFFIX = "_position"
 STRATEGY_RETURN_SUFFIX = "_strategy_return"
 CUMULATIVE_RETURN_SUFFIX = "_cumulative_return"
 EQUITY_CURVE_SUFFIX = "_equity_curve"
+NET_EXPOSURE_SUFFIX = "_net_exposure"
+GROSS_EXPOSURE_SUFFIX = "_gross_exposure"
