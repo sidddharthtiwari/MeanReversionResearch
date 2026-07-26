@@ -11,6 +11,7 @@ __all__ = [
     "FLAT_SIGNAL",
     "SHORT_SIGNAL",
     "SIGNAL_SUFFIX",
+    "CROSSOVER_SIGNAL_SUFFIX",
 ]
 
 # Discrete position direction encoded by signal generators.
@@ -20,3 +21,4 @@ SHORT_SIGNAL = -1
 
 # Appended to feature names when deriving default signal column names.
 SIGNAL_SUFFIX = "_signal"
+CROSSOVER_SIGNAL_SUFFIX = "_cross_signal"
