@@ -15,58 +15,14 @@ from src.signals.constants import (
     SHORT_SIGNAL,
     SIGNAL_SUFFIX,
 )
+from src.signals.validation import (
+    _validate_numeric_column,
+    _validate_thresholds,
+)
 
 __all__ = [
     "generate_threshold_signal",
 ]
-
-
-def _validate_numeric_column(df: pd.DataFrame, column: str) -> None:
-    """Validate that ``column`` exists and has a numeric dtype.
-
-    Args:
-        df: Input DataFrame containing the column to validate.
-        column: Name of the numeric feature column to validate.
-
-    Raises:
-        KeyError: If ``column`` is not present in ``df``.
-        TypeError: If ``column`` is not numeric.
-    """
-    if column not in df.columns:
-        raise KeyError(f"Column '{column}' not found in DataFrame.")
-    if not pd.api.types.is_numeric_dtype(df[column]):
-        raise TypeError(
-            f"Column '{column}' must be numeric, got dtype '{df[column].dtype}'."
-        )
-
-
-def _validate_thresholds(
-    buy_threshold: float | None,
-    sell_threshold: float | None,
-) -> None:
-    """Validate buy/sell threshold configuration.
-
-    Args:
-        buy_threshold: Optional long-entry threshold.
-        sell_threshold: Optional short-entry threshold.
-
-    Raises:
-        ValueError: If both thresholds are ``None``, or if both are provided
-            and ``buy_threshold`` is not strictly less than ``sell_threshold``.
-    """
-    if buy_threshold is None and sell_threshold is None:
-        raise ValueError(
-            "At least one of buy_threshold or sell_threshold must be provided."
-        )
-    if (
-        buy_threshold is not None
-        and sell_threshold is not None
-        and not buy_threshold < sell_threshold
-    ):
-        raise ValueError(
-            f"buy_threshold ({buy_threshold}) must be less than "
-            f"sell_threshold ({sell_threshold})."
-        )
 
 
 def _generate_output_column_name(
