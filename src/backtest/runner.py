@@ -17,8 +17,49 @@ from src.backtest.slippage import apply_slippage
 from src.backtest.transaction_costs import apply_transaction_costs
 
 __all__ = [
+    "resolve_backtest_return_column",
     "run_backtest",
 ]
+
+
+def resolve_backtest_return_column(
+    strategy_return_column: str,
+    transaction_cost: int | float = DEFAULT_TRANSACTION_COST,
+    slippage: int | float = DEFAULT_SLIPPAGE,
+    output_column: str | None = None,
+) -> str:
+    """Resolve the final return column produced by ``run_backtest``.
+
+    Mirrors the default net-return naming used when transaction costs and/or
+    slippage stages are applied.
+
+    Args:
+        strategy_return_column: Gross strategy-return column used as the start.
+        transaction_cost: Cost charged per unit of trade size.
+        slippage: Slippage charged per unit of trade size.
+        output_column: Optional explicit net-return column name for each
+            applied stage. Defaults to ``{input_return_column}_net_return``.
+
+    Returns:
+        Name of the final return column available after ``run_backtest``.
+    """
+    current_return_column = strategy_return_column
+
+    if transaction_cost > 0:
+        current_return_column = (
+            output_column
+            if output_column is not None
+            else f"{current_return_column}{NET_RETURN_SUFFIX}"
+        )
+
+    if slippage > 0:
+        current_return_column = (
+            output_column
+            if output_column is not None
+            else f"{current_return_column}{NET_RETURN_SUFFIX}"
+        )
+
+    return current_return_column
 
 
 def run_backtest(
@@ -80,10 +121,11 @@ def run_backtest(
             transaction_cost_column=transaction_cost_column,
             output_column=output_column,
         )
-        current_return_column = (
-            output_column
-            if output_column is not None
-            else f"{current_return_column}{NET_RETURN_SUFFIX}"
+        current_return_column = resolve_backtest_return_column(
+            strategy_return_column=current_return_column,
+            transaction_cost=transaction_cost,
+            slippage=0,
+            output_column=output_column,
         )
 
     if slippage > 0:

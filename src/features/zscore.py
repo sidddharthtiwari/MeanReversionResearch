@@ -12,6 +12,7 @@ import pandas as pd
 from src.features.rolling import compute_rolling_mean, compute_rolling_std
 
 __all__ = [
+    "generate_zscore_column_name",
     "compute_zscore",
 ]
 
@@ -20,11 +21,11 @@ _TEMP_ROLLING_MEAN_COLUMN = "__rolling_mean_temp__"
 _TEMP_ROLLING_STD_COLUMN = "__rolling_std_temp__"
 
 
-def _generate_output_column_name(
+def generate_zscore_column_name(
     window: int,
-    output_column: str | None,
+    output_column: str | None = None,
 ) -> str:
-    """Resolve the z-score output column name.
+    """Generate the z-score output column name.
 
     Args:
         window: Rolling window size used in the default name.
@@ -61,7 +62,7 @@ def _compute_zscore(
         A new DataFrame containing the original columns plus the z-score
         column. The caller's DataFrame is never modified.
     """
-    name = _generate_output_column_name(window, output_column)
+    name = generate_zscore_column_name(window, output_column)
 
     with_mean = compute_rolling_mean(
         df,

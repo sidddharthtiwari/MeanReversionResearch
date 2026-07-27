@@ -20,15 +20,16 @@ from src.portfolio.validation import (
 )
 
 __all__ = [
+    "generate_strategy_return_column_name",
     "generate_strategy_returns",
 ]
 
 
-def _generate_strategy_return_column_name(
+def generate_strategy_return_column_name(
     position_column: str,
-    strategy_return_column: str | None,
+    strategy_return_column: str | None = None,
 ) -> str:
-    """Resolve the strategy-return output column name.
+    """Generate the strategy-return output column name.
 
     Args:
         position_column: Source position column used in the default name.
@@ -156,7 +157,9 @@ def generate_strategy_returns(
 ) -> pd.DataFrame:
     """Compute strategy returns, cumulative returns, and equity curve.
 
-    Strategy return is ``position * asset_return``. Cumulative return is
+    Strategy return is ``position * asset_return``. Missing asset-return
+    values are treated as ``0.0`` so leading return gaps do not poison the
+    cumulative product. Cumulative return is
     ``(1 + strategy_return).cumprod() - 1``. Equity curve is
     ``1 + cumulative_return``.
 
@@ -174,7 +177,8 @@ def generate_strategy_returns(
 
     Returns:
         A new DataFrame with strategy-return, cumulative-return, and equity
-        curve columns appended. The input is unchanged.
+        curve columns appended. Missing values in ``asset_return_column`` are
+        filled with ``0.0`` in the returned frame. The input is unchanged.
 
     Raises:
         KeyError: If either required column is missing.
@@ -183,7 +187,7 @@ def generate_strategy_returns(
     """
     _validate_return_inputs(df, position_column, asset_return_column)
 
-    strategy_name = _generate_strategy_return_column_name(
+    strategy_name = generate_strategy_return_column_name(
         position_column,
         strategy_return_column,
     )
@@ -197,6 +201,7 @@ def generate_strategy_returns(
     )
 
     result = df.copy()
+    result[asset_return_column] = result[asset_return_column].fillna(0.0)
     strategy_returns = _compute_strategy_returns(
         positions=result[position_column],
         asset_returns=result[asset_return_column],

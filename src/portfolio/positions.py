@@ -16,15 +16,16 @@ from src.signals.constants import FLAT_SIGNAL
 from src.signals.signal_utils import _validate_signal_column
 
 __all__ = [
+    "generate_position_column_name",
     "generate_positions",
 ]
 
 
-def _generate_output_column_name(
+def generate_position_column_name(
     signal_column: str,
-    output_column: str | None,
+    output_column: str | None = None,
 ) -> str:
-    """Resolve the position output column name.
+    """Generate the position output column name.
 
     Args:
         signal_column: Source signal column used in the default name.
@@ -103,7 +104,7 @@ def generate_positions(
     """
     _validate_position_inputs(df, signal_column)
 
-    name = _generate_output_column_name(signal_column, output_column)
+    name = generate_position_column_name(signal_column, output_column)
     result = df.copy()
     result[name] = _apply_position_logic(result[signal_column])
     return result

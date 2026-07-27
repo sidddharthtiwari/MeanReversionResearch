@@ -18,15 +18,16 @@ from src.signals.constants import (
 from src.signals.validation import _validate_numeric_column
 
 __all__ = [
+    "generate_mean_reversion_signal_column_name",
     "generate_mean_reversion_signal",
 ]
 
 
-def _generate_output_column_name(
+def generate_mean_reversion_signal_column_name(
     feature_column: str,
-    output_column: str | None,
+    output_column: str | None = None,
 ) -> str:
-    """Resolve the mean-reversion signal output column name.
+    """Generate the mean-reversion signal output column name.
 
     Args:
         feature_column: Source feature column used in the default name.
@@ -111,7 +112,10 @@ def generate_mean_reversion_signal(
     _validate_numeric_column(df, feature_column)
     _validate_entry_threshold(entry_threshold)
 
-    name = _generate_output_column_name(feature_column, output_column)
+    name = generate_mean_reversion_signal_column_name(
+        feature_column,
+        output_column,
+    )
     result = df.copy()
     result[name] = _apply_mean_reversion_logic(
         values=result[feature_column],
