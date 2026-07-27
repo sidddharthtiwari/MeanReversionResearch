@@ -2,7 +2,8 @@
 
 Computes maximum drawdown and drawdown duration from a period-return column.
 This module does not compute risk-adjusted ratios or return-performance
-statistics.
+statistics. Equity and drawdown time-series are produced by the performance
+package.
 """
 
 from __future__ import annotations
@@ -13,40 +14,16 @@ from src.analytics.validation import (
     _validate_columns_exist,
     _validate_numeric_series,
 )
+from src.performance.constants import (
+    DEFAULT_DRAWDOWN_COLUMN,
+    DEFAULT_EQUITY_COLUMN,
+)
+from src.performance.drawdown import compute_drawdown_series
+from src.performance.equity import compute_equity_curve
 
 __all__ = [
     "generate_drawdown_summary",
 ]
-
-
-def _compute_cumulative_equity(returns: pd.Series) -> pd.Series:
-    """Compute cumulative equity from a period-return series.
-
-    Equity is ``(1.0 + returns).cumprod()``.
-
-    Args:
-        returns: Period return series.
-
-    Returns:
-        Cumulative equity series aligned to ``returns.index``.
-    """
-    return (1.0 + returns).cumprod()
-
-
-def _compute_drawdown_series(equity: pd.Series) -> pd.Series:
-    """Compute the drawdown series from cumulative equity.
-
-    Drawdown is ``(equity / running_peak) - 1``, where ``running_peak`` is the
-    cumulative maximum of ``equity``.
-
-    Args:
-        equity: Cumulative equity series.
-
-    Returns:
-        Drawdown series aligned to ``equity.index``.
-    """
-    running_peak = equity.cummax()
-    return (equity / running_peak) - 1.0
 
 
 def _compute_max_drawdown(drawdown: pd.Series) -> float:
@@ -119,8 +96,12 @@ def generate_drawdown_summary(
     _validate_columns_exist(df, [return_column])
     _validate_numeric_series(df[return_column], return_column)
 
-    equity_curve = _compute_cumulative_equity(df[return_column])
-    drawdown_series = _compute_drawdown_series(equity_curve)
+    equity_frame = compute_equity_curve(df, return_column)
+    drawdown_frame = compute_drawdown_series(
+        equity_frame,
+        DEFAULT_EQUITY_COLUMN,
+    )
+    drawdown_series = drawdown_frame[DEFAULT_DRAWDOWN_COLUMN]
 
     return {
         "max_drawdown": _compute_max_drawdown(drawdown_series),
