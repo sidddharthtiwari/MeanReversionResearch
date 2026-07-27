@@ -1,0 +1,14 @@
+{
+    "annualised_return": -0.7074190399192325,
+    "annualised_volatility": 0.1352428801413449,
+    "average_period_return": -0.0028072184123779068,
+    "cagr": -0.5121613788994753,
+    "calmar_ratio": -0.5146213395689953,
+    "downside_deviation": 0.008330667240741068,
+    "drawdown_duration": 1867,
+    "max_drawdown": -0.9952198626827636,
+    "sharpe_ratio": -5.230730365841777,
+    "sortino_ratio": -84.91745252524369,
+    "total_return": -0.9951794084638448,
+    "volatility": 0.008519500653478916
+}

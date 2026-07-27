@@ -1,135 +1,130 @@
 """Official entry point for the MeanReversionResearch framework.
 
-Demonstrates the complete end-to-end research workflow by orchestrating
-existing public APIs. This module contains no business logic, calculations,
-or private helpers.
+Orchestrates basket-level research across every available sector by
+delegating to existing public APIs. This module contains no business logic
+or mathematical calculations.
 """
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
-from src.backtest.runner import resolve_backtest_return_column
-from src.data.loader import load_sector
-from src.features.zscore import generate_zscore_column_name
-from src.performance.constants import DEFAULT_EQUITY_COLUMN
+import pandas as pd
+
+from src.analytics.summary import generate_summary
+from src.data.loader import (
+    available_sectors,
+    load_sector,
+    load_sector_metadata,
+)
+from src.performance.constants import (
+    DEFAULT_DRAWDOWN_COLUMN,
+    DEFAULT_EQUITY_COLUMN,
+)
 from src.performance.drawdown import compute_drawdown_series
 from src.performance.equity import compute_equity_curve
 from src.pipeline.config import PipelineConfig
-from src.pipeline.output import save_pipeline_outputs
-from src.pipeline.runner import run_pipeline
-from src.portfolio.positions import generate_position_column_name
-from src.portfolio.returns import generate_strategy_return_column_name
-from src.signals.mean_reversion import generate_mean_reversion_signal_column_name
-from src.visualization.drawdown import plot_drawdown_curve
-from src.visualization.equity import plot_equity_curve
+from src.research.output import save_research_outputs
+from src.research.pipeline import run_research
+from src.research.summary import create_summary_row
+from src.research.visualization import save_research_visualizations
 
-# ---------------------------------------------------------------------------
-# User-editable configuration
-# ---------------------------------------------------------------------------
+logger = logging.getLogger(__name__)
 
-SECTOR = "bank"
-SYMBOL = "AUBANK"
-OUTPUT_DIRECTORY = "outputs"
+PORTFOLIO_RETURN_COLUMN = "portfolio_return"
+BASKET_COMPARISON_FILENAME = "basket_comparison.csv"
 
-LOOKBACK = 20
-ENTRY_ZSCORE = 2.0
-EXIT_ZSCORE = 0.5
-TRANSACTION_COST = 0.001
-SLIPPAGE = 0.0005
-REBALANCE_FREQUENCY = "D"
 
-EQUITY_FIGURE_FILENAME = "equity_curve.png"
-DRAWDOWN_FIGURE_FILENAME = "drawdown_curve.png"
+def _process_basket(
+    basket_name: str,
+    config: PipelineConfig,
+) -> dict[str, object]:
+    """Run the complete research workflow for one basket.
+
+    Args:
+        basket_name: Sector identifier discovered from OHLC parquet files.
+        config: Shared immutable pipeline configuration.
+
+    Returns:
+        One summary-row dictionary for basket comparison.
+    """
+    sector_data = load_sector(basket_name)
+    metadata = load_sector_metadata(basket_name)
+    result = run_research(sector_data, metadata, config)
+
+    portfolio_returns = result.portfolio_returns.to_frame(
+        name=PORTFOLIO_RETURN_COLUMN,
+    )
+    analytics = generate_summary(
+        portfolio_returns,
+        return_column=PORTFOLIO_RETURN_COLUMN,
+        frequency=config.rebalance_frequency,
+    )
+
+    equity_frame = compute_equity_curve(
+        portfolio_returns,
+        return_column=PORTFOLIO_RETURN_COLUMN,
+    )
+    drawdown_frame = compute_drawdown_series(
+        equity_frame,
+        equity_column=DEFAULT_EQUITY_COLUMN,
+    )
+
+    basket_output_directory = Path(config.output_directory) / basket_name
+    save_research_outputs(result, analytics, basket_output_directory)
+    save_research_visualizations(
+        equity_frame[DEFAULT_EQUITY_COLUMN],
+        drawdown_frame[DEFAULT_DRAWDOWN_COLUMN],
+        basket_output_directory,
+    )
+
+    return create_summary_row(basket_name, result, analytics)
 
 
 def main() -> None:
-    """Run the complete MeanReversionResearch workflow.
+    """Execute basket research for every available sector.
 
-    Orchestrates data loading, pipeline execution, analytics reporting,
-    visualisation, and output persistence using public framework APIs only.
+    Discovers sector parquet files, orchestrates the public research workflow
+    for each basket, and writes a cross-basket comparison table.
     """
-    try:
-        # ------------------------------------------------
-        # Stage 1: Load market data
-        # ------------------------------------------------
-        print("Loading market data...")
-        market_data = load_sector(SECTOR)
-        market_data = market_data.loc[market_data["symbol"] == SYMBOL].copy()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
 
-        # ------------------------------------------------
-        # Stage 2: Execute research pipeline
-        # ------------------------------------------------
-        print("Running research pipeline...")
-        config = PipelineConfig(
-            lookback=LOOKBACK,
-            entry_zscore=ENTRY_ZSCORE,
-            exit_zscore=EXIT_ZSCORE,
-            transaction_cost=TRANSACTION_COST,
-            slippage=SLIPPAGE,
-            rebalance_frequency=REBALANCE_FREQUENCY,
-            output_directory=OUTPUT_DIRECTORY,
-        )
-        result = run_pipeline(market_data, config)
+    config = PipelineConfig()
+    output_root = Path(config.output_directory)
+    output_root.mkdir(parents=True, exist_ok=True)
 
-        # ------------------------------------------------
-        # Stage 3: Print analytics summary
-        # ------------------------------------------------
-        print("Generating analytics summary...")
-        print()
-        print("Analytics Summary")
-        print("-" * 40)
-        for metric_name, metric_value in result.analytics.items():
-            print(f"{metric_name}: {metric_value}")
-        print()
+    baskets = available_sectors()
+    logger.info("Discovered %d baskets.", len(baskets))
 
-        # ------------------------------------------------
-        # Stage 4: Generate visualisations
-        # ------------------------------------------------
-        print("Generating visualisations...")
-        zscore_column = generate_zscore_column_name(window=LOOKBACK)
-        signal_column = generate_mean_reversion_signal_column_name(
-            feature_column=zscore_column,
-        )
-        position_column = generate_position_column_name(
-            signal_column=signal_column,
-        )
-        strategy_return_column = generate_strategy_return_column_name(
-            position_column=position_column,
-        )
-        analytics_return_column = resolve_backtest_return_column(
-            strategy_return_column=strategy_return_column,
-            transaction_cost=TRANSACTION_COST,
-            slippage=SLIPPAGE,
-        )
+    summary_rows: list[dict[str, object]] = []
+    for basket_name in baskets:
+        logger.info("Starting basket '%s'.", basket_name)
+        try:
+            summary_row = _process_basket(basket_name, config)
+        except Exception:
+            logger.exception("Skipped basket '%s'.", basket_name)
+            continue
 
-        equity_frame = compute_equity_curve(
-            result.backtest,
-            return_column=analytics_return_column,
-        )
-        drawdown_frame = compute_drawdown_series(
-            equity_frame,
-            equity_column=DEFAULT_EQUITY_COLUMN,
-        )
-        equity_figure = plot_equity_curve(equity_frame)
-        drawdown_figure = plot_drawdown_curve(drawdown_frame)
+        summary_rows.append(summary_row)
+        logger.info("Completed basket '%s'.", basket_name)
 
-        # ------------------------------------------------
-        # Stage 5: Save outputs
-        # ------------------------------------------------
-        print("Saving outputs...")
-        output_path = Path(OUTPUT_DIRECTORY)
-        save_pipeline_outputs(result, output_path)
-        equity_figure.savefig(output_path / EQUITY_FIGURE_FILENAME)
-        drawdown_figure.savefig(output_path / DRAWDOWN_FIGURE_FILENAME)
-
-        # ------------------------------------------------
-        # Stage 6: Completion
-        # ------------------------------------------------
-        print("Research completed successfully.")
-    except Exception as error:
-        print(f"Research pipeline failed: {error}")
-        raise
+    if summary_rows:
+        comparison = pd.DataFrame(summary_rows)
+        comparison_path = output_root / BASKET_COMPARISON_FILENAME
+        comparison.to_csv(comparison_path, index=False)
+        logger.info(
+            "Final summary: completed %d of %d baskets. "
+            "Comparison written to %s.",
+            len(summary_rows),
+            len(baskets),
+            comparison_path,
+        )
+    else:
+        logger.warning("No baskets completed successfully.")
 
 
 if __name__ == "__main__":
